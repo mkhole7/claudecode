@@ -283,14 +283,17 @@ function makeTodoICS(title,due){
   return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nBEGIN:VTODO\r\nSUMMARY:${title}${d}\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO\r\nEND:VCALENDAR`;
 }
 function openICS(content,filename){
-  if(/iPhone|iPad|iPod/.test(navigator.userAgent)){
-    window.location.href='data:text/calendar;charset=utf-8,'+encodeURIComponent(content);
-  } else {
-    const blob=new Blob([content],{type:'text/calendar;charset=utf-8'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download=filename;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  const blob=new Blob([content],{type:'text/calendar;charset=utf-8'});
+  const file=new File([blob],filename,{type:'text/calendar;charset=utf-8'});
+  // Web Share API: iOS Safari 공유 시트 (캘린더에 추가 옵션 포함)
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file]}).catch(()=>{});
+    return;
   }
+  // 데스크탑: blob URL 다운로드
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 
 // ─── Web Speech API ───────────────────────────────────────────────────────────
@@ -405,13 +408,12 @@ function onConfirm(){
   if(!current)return;
   const title=document.getElementById('titleInput').value||current.title;
   const{type,date,category}=current;
-  const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
   if(type==='calendar'){
     openICS(makeEventICS(title,date||new Date()),'event.ics');
-    showToast(isIOS?'캘린더 앱에서 일정을 추가하세요 (완료 후 뒤로 가기)':'📁 파일을 열면 iOS 캘린더에 추가됩니다');
+    showToast('공유 메뉴에서 "캘린더에 추가"를 선택하세요');
   } else {
     openICS(makeTodoICS(title,date),'reminder.ics');
-    showToast(isIOS?'미리알림 앱에서 할일을 추가하세요 (완료 후 뒤로 가기)':'📁 파일을 열면 미리알림에 추가됩니다');
+    showToast('공유 메뉴에서 "미리알림" 또는 "캘린더에 추가"를 선택하세요');
   }
   setTimeout(()=>{document.getElementById('inputText').value='';onCancel();},1500);
 }
