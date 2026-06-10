@@ -2,12 +2,13 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = MainViewModel()
+    @StateObject private var voice = VoiceRecognizer()
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    InputCard(viewModel: viewModel)
+                    InputCard(viewModel: viewModel, voice: voice)
 
                     if viewModel.parsedItem != nil {
                         ParsedItemCard(viewModel: viewModel)
@@ -28,6 +29,19 @@ struct ContentView: View {
             } message: {
                 Text(viewModel.alertMessage)
             }
+            .alert("음성 인식 오류", isPresented: .constant(voice.errorMessage != nil)) {
+                Button("확인", role: .cancel) { voice.errorMessage = nil }
+            } message: {
+                Text(voice.errorMessage ?? "")
+            }
+        }
+        .onChange(of: voice.transcribedText) { text in
+            if !text.isEmpty { viewModel.inputText = text }
+        }
+        .onChange(of: voice.isRecording) { recording in
+            if !recording && !voice.transcribedText.isEmpty {
+                viewModel.parseInput()
+            }
         }
     }
 }
@@ -36,6 +50,7 @@ struct ContentView: View {
 
 struct InputCard: View {
     @ObservedObject var viewModel: MainViewModel
+    @ObservedObject var voice: VoiceRecognizer
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -47,37 +62,98 @@ struct InputCard: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(.secondarySystemBackground))
 
-                if viewModel.inputText.isEmpty {
-                    Text("예: 내일 오후 3시에 팀 미팅")
+                if viewModel.inputText.isEmpty && !voice.isRecording {
+                    Text("텍스트 입력 또는 🎤 음성 입력")
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
                         .allowsHitTesting(false)
                 }
 
-                TextEditor(text: $viewModel.inputText)
-                    .frame(minHeight: 90)
-                    .padding(8)
-                    .focused($isFocused)
-                    .scrollContentBackground(.hidden)
+                if voice.isRecording {
+                    VStack {
+                        HStack(spacing: 8) {
+                            RecordingIndicator()
+                            Text("듣는 중...")
+                                .foregroundColor(.red)
+                                .font(.subheadline)
+                        }
+                        .padding(.top, 12)
+                        .padding(.leading, 12)
+                        if !voice.transcribedText.isEmpty {
+                            Text(voice.transcribedText)
+                                .foregroundColor(.primary)
+                                .font(.body)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 4)
+                        }
+                        Spacer()
+                    }
+                } else {
+                    TextEditor(text: $viewModel.inputText)
+                        .frame(minHeight: 90)
+                        .padding(8)
+                        .focused($isFocused)
+                        .scrollContentBackground(.hidden)
+                }
             }
             .frame(minHeight: 90)
 
-            Button {
-                isFocused = false
-                viewModel.parseInput()
-            } label: {
-                Label("분석하기", systemImage: "wand.and.stars")
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 10) {
+                // Voice button
+                Button {
+                    isFocused = false
+                    if voice.isRecording {
+                        Task { await voice.stopRecording() }
+                    } else {
+                        viewModel.inputText = ""
+                        Task { await voice.startRecording() }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic.fill")
+                        Text(voice.isRecording ? "중지" : "음성")
+                    }
                     .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(voice.isRecording ? Color.red : Color(.secondarySystemBackground))
+                    .foregroundColor(voice.isRecording ? .white : .primary)
+                    .cornerRadius(12)
+                }
+
+                // Parse button
+                Button {
+                    isFocused = false
+                    viewModel.parseInput()
+                } label: {
+                    Label("분석하기", systemImage: "wand.and.stars")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || voice.isRecording)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
+    }
+}
+
+// MARK: - Recording Indicator
+
+struct RecordingIndicator: View {
+    @State private var animating = false
+
+    var body: some View {
+        Circle()
+            .fill(Color.red)
+            .frame(width: 10, height: 10)
+            .scaleEffect(animating ? 1.3 : 0.8)
+            .opacity(animating ? 1 : 0.5)
+            .animation(.easeInOut(duration: 0.6).repeatForever(), value: animating)
+            .onAppear { animating = true }
     }
 }
 
@@ -100,9 +176,7 @@ struct ParsedItemCard: View {
                 typePicker(item: item)
                 titleRow(item: item)
                 dateRow(item: item)
-                if item.type == .reminder {
-                    categoryRow(item: item)
-                }
+                if item.type == .reminder { categoryRow(item: item) }
                 Divider()
                 actionButtons(item: item)
             }
@@ -120,20 +194,14 @@ struct ParsedItemCard: View {
                 .font(.headline)
                 .foregroundColor(.green)
             Spacer()
-            confidenceBadge(value: item.confidence)
+            let color: Color = item.confidence >= 0.8 ? .green : item.confidence >= 0.6 ? .orange : .red
+            Text("\(Int(item.confidence * 100))% 확신")
+                .font(.caption.bold())
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(color.opacity(0.15))
+                .foregroundColor(color)
+                .cornerRadius(8)
         }
-    }
-
-    @ViewBuilder
-    private func confidenceBadge(value: Double) -> some View {
-        let color: Color = value >= 0.8 ? .green : value >= 0.6 ? .orange : .red
-        Text("\(Int(value * 100))% 확신")
-            .font(.caption.bold())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.15))
-            .foregroundColor(color)
-            .cornerRadius(8)
     }
 
     @ViewBuilder
@@ -144,9 +212,7 @@ struct ParsedItemCard: View {
                 get: { item.type },
                 set: { viewModel.editType($0) }
             )) {
-                ForEach(ScheduleType.allCases, id: \.self) { type in
-                    Text(type.rawValue).tag(type)
-                }
+                ForEach(ScheduleType.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
         }
@@ -158,25 +224,16 @@ struct ParsedItemCard: View {
             Text("제목").font(.caption).foregroundColor(.secondary)
             if isEditingTitle {
                 HStack {
-                    TextField("제목", text: $editTitle)
-                        .textFieldStyle(.roundedBorder)
-                    Button("완료") {
-                        viewModel.editTitle(editTitle)
-                        isEditingTitle = false
-                    }
-                    .foregroundColor(.accentColor)
+                    TextField("제목", text: $editTitle).textFieldStyle(.roundedBorder)
+                    Button("완료") { viewModel.editTitle(editTitle); isEditingTitle = false }
+                        .foregroundColor(.accentColor)
                 }
             } else {
                 HStack {
-                    Text(item.title)
-                        .font(.body.weight(.medium))
+                    Text(item.title).font(.body.weight(.medium))
                     Spacer()
-                    Button {
-                        editTitle = item.title
-                        isEditingTitle = true
-                    } label: {
-                        Image(systemName: "pencil")
-                            .foregroundColor(.accentColor)
+                    Button { editTitle = item.title; isEditingTitle = true } label: {
+                        Image(systemName: "pencil").foregroundColor(.accentColor)
                     }
                 }
             }
@@ -189,8 +246,7 @@ struct ParsedItemCard: View {
             Text("날짜/시간").font(.caption).foregroundColor(.secondary)
             HStack {
                 Image(systemName: "clock").foregroundColor(.secondary)
-                Text(item.formattedDate)
-                    .font(.subheadline)
+                Text(item.formattedDate).font(.subheadline)
                 Spacer()
                 Button {
                     selectedDate = item.startDate ?? Date()
@@ -201,17 +257,10 @@ struct ParsedItemCard: View {
                 }
             }
             if showDatePicker {
-                DatePicker(
-                    "날짜/시간",
-                    selection: $selectedDate,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .onChange(of: selectedDate) { newDate in
-                    viewModel.editDate(newDate)
-                }
-                .transition(.opacity)
+                DatePicker("날짜/시간", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.compact).labelsHidden()
+                    .onChange(of: selectedDate) { viewModel.editDate($0) }
+                    .transition(.opacity)
             }
         }
     }
@@ -222,18 +271,13 @@ struct ParsedItemCard: View {
             Text("목록").font(.caption).foregroundColor(.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(ReminderCategory.allCases, id: \.self) { category in
-                        Button {
-                            viewModel.editCategory(category)
-                        } label: {
-                            Label(category.rawValue, systemImage: category.icon)
+                    ForEach(ReminderCategory.allCases, id: \.self) { cat in
+                        Button { viewModel.editCategory(cat) } label: {
+                            Label(cat.rawValue, systemImage: cat.icon)
                                 .font(.subheadline)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .background(item.reminderCategory == category
-                                    ? Color.accentColor
-                                    : Color(.secondarySystemBackground))
-                                .foregroundColor(item.reminderCategory == category ? .white : .primary)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(item.reminderCategory == cat ? Color.accentColor : Color(.secondarySystemBackground))
+                                .foregroundColor(item.reminderCategory == cat ? .white : .primary)
                                 .cornerRadius(20)
                         }
                     }
@@ -245,31 +289,22 @@ struct ParsedItemCard: View {
     @ViewBuilder
     private func actionButtons(item: ParsedItem) -> some View {
         HStack(spacing: 12) {
-            Button("취소") {
-                viewModel.cancel()
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color(.secondarySystemBackground))
-            .foregroundColor(.primary)
-            .cornerRadius(12)
+            Button("취소") { viewModel.cancel() }
+                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                .background(Color(.secondarySystemBackground))
+                .foregroundColor(.primary).cornerRadius(12)
 
             Button {
                 Task { await viewModel.confirmAction() }
             } label: {
                 if viewModel.isProcessing {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
+                    ProgressView().progressViewStyle(.circular).tint(.white)
                 } else {
                     Text(item.type == .calendarEvent ? "캘린더에 추가" : "미리알림에 추가")
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color.accentColor)
-            .foregroundColor(.white)
-            .cornerRadius(12)
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(Color.accentColor).foregroundColor(.white).cornerRadius(12)
             .disabled(viewModel.isProcessing)
         }
     }
@@ -280,12 +315,7 @@ struct ParsedItemCard: View {
 struct ExamplesCard: View {
     @ObservedObject var viewModel: MainViewModel
 
-    private struct Example {
-        let icon: String
-        let text: String
-        let color: Color
-    }
-
+    private struct Example { let icon: String; let text: String; let color: Color }
     private let examples = [
         Example(icon: "calendar", text: "내일 오후 3시에 팀 미팅", color: .blue),
         Example(icon: "calendar", text: "다음주 월요일 오전 10시 치과 예약", color: .blue),
@@ -296,26 +326,15 @@ struct ExamplesCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("입력 예시 (탭하면 입력됩니다)", systemImage: "lightbulb.fill")
-                .font(.headline)
-                .foregroundColor(.orange)
-
-            ForEach(examples, id: \.text) { example in
-                Button {
-                    viewModel.inputText = example.text
-                } label: {
+            Label("입력 예시 (탭하면 입력)", systemImage: "lightbulb.fill")
+                .font(.headline).foregroundColor(.orange)
+            ForEach(examples, id: \.text) { ex in
+                Button { viewModel.inputText = ex.text } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: example.icon)
-                            .foregroundColor(example.color)
-                            .frame(width: 24)
-                        Text(example.text)
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.leading)
+                        Image(systemName: ex.icon).foregroundColor(ex.color).frame(width: 24)
+                        Text(ex.text).font(.subheadline).foregroundColor(.primary).multilineTextAlignment(.leading)
                         Spacer()
-                        Image(systemName: "arrow.up.left")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        Image(systemName: "arrow.up.left").font(.caption).foregroundColor(.secondary)
                     }
                     .padding(.vertical, 4)
                 }
@@ -328,6 +347,4 @@ struct ExamplesCard: View {
     }
 }
 
-#Preview {
-    ContentView()
-}
+#Preview { ContentView() }

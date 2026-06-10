@@ -15,6 +15,7 @@
 		29B97335FDCFA39411CA2CEA /* CalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B97325FDCFA39411CA2CEA /* CalendarManager.swift */; };
 		29B97336FDCFA39411CA2CEA /* RemindersManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B97326FDCFA39411CA2CEA /* RemindersManager.swift */; };
 		29B97337FDCFA39411CA2CEA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 29B97328FDCFA39411CA2CEA /* Assets.xcassets */; };
+		29B97381FDCFA39411CA2CEA /* VoiceRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B97380FDCFA39411CA2CEA /* VoiceRecognizer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 		29B97327FDCFA39411CA2CEA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		29B97328FDCFA39411CA2CEA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		29B97329FDCFA39411CA2CEA /* SmartSchedule.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SmartSchedule.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		29B97380FDCFA39411CA2CEA /* VoiceRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecognizer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,6 +63,7 @@
 				29B97326FDCFA39411CA2CEA /* RemindersManager.swift */,
 				29B97327FDCFA39411CA2CEA /* Info.plist */,
 				29B97328FDCFA39411CA2CEA /* Assets.xcassets */,
+				29B97380FDCFA39411CA2CEA /* VoiceRecognizer.swift */,
 			);
 			path = SmartSchedule;
 			sourceTree = "<group>";
@@ -150,6 +153,7 @@
 				29B97334FDCFA39411CA2CEA /* NLPParser.swift in Sources */,
 				29B97335FDCFA39411CA2CEA /* CalendarManager.swift in Sources */,
 				29B97336FDCFA39411CA2CEA /* RemindersManager.swift in Sources */,
+				29B97381FDCFA39411CA2CEA /* VoiceRecognizer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
