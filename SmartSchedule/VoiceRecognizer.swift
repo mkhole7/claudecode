@@ -10,6 +10,8 @@ class VoiceRecognizer: NSObject, ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    private var silenceTimer: Timer?
+    private let silenceTimeout: TimeInterval = 3.0
 
     func requestPermission() async -> Bool {
         let micStatus = AVAudioApplication.shared.recordPermission
@@ -65,6 +67,11 @@ class VoiceRecognizer: NSObject, ObservableObject {
             if let result {
                 Task { @MainActor in
                     self.transcribedText = result.bestTranscription.formattedString
+                    // 음성 인식될 때마다 3초 무음 타이머 리셋
+                    self.silenceTimer?.invalidate()
+                    self.silenceTimer = Timer.scheduledTimer(withTimeInterval: self.silenceTimeout, repeats: false) { [weak self] _ in
+                        Task { await self?.stopRecording() }
+                    }
                 }
             }
             if error != nil || result?.isFinal == true {
@@ -75,6 +82,8 @@ class VoiceRecognizer: NSObject, ObservableObject {
 
     func stopRecording() async {
         guard audioEngine.isRunning else { return }
+        silenceTimer?.invalidate()
+        silenceTimer = nil
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()

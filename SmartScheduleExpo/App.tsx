@@ -169,6 +169,7 @@ export default function App() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const silenceStart = useRef<number | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -176,37 +177,65 @@ export default function App() {
 
   const onParse = () => { inputRef.current?.blur(); setItem(parseText(input)); };
 
+  const SILENCE_THRESHOLD = -40; // dBFS 이하 = 무음
+  const SILENCE_DURATION = 3000; // 3초
+
   const startRecording = async () => {
     const { status } = await Audio.requestPermissionsAsync();
     if (status !== 'granted') { Alert.alert('권한 필요', '마이크 접근 권한이 필요합니다.'); return; }
     await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-    const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+
+    const { recording: rec } = await Audio.Recording.createAsync({
+      ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      isMeteringEnabled: true,
+    });
+
+    silenceStart.current = null;
+    rec.setOnRecordingStatusUpdate((status) => {
+      if (!status.isRecording) return;
+      const level = status.metering ?? -160;
+      if (level < SILENCE_THRESHOLD) {
+        if (!silenceStart.current) silenceStart.current = Date.now();
+        else if (Date.now() - silenceStart.current >= SILENCE_DURATION) {
+          silenceStart.current = null;
+          stopRecordingAndTranscribe(rec);
+        }
+      } else {
+        silenceStart.current = null; // 소리 감지 → 타이머 리셋
+      }
+    });
+
     setRecording(rec); setIsRecording(true); setInput('');
+  };
+
+  const stopRecordingAndTranscribe = async (rec: Audio.Recording) => {
+    try {
+      setIsRecording(false);
+      await rec.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = rec.getURI();
+      setRecording(null);
+      if (!uri) return;
+      if (!apiKey) {
+        Alert.alert('API 키 필요', 'OpenAI Whisper 음성 인식을 위해 API 키가 필요합니다.', [
+          { text: '설정하기', onPress: () => setShowSettings(true) }, { text: '취소' },
+        ]);
+        return;
+      }
+      setIsTranscribing(true);
+      try {
+        const text = await transcribeWithWhisper(uri, apiKey);
+        if (text) { setInput(text); setTimeout(() => setItem(parseText(text)), 300); }
+        else { Alert.alert('알림', '음성을 인식하지 못했습니다.'); }
+      } catch (e: any) { Alert.alert('오류', e.message); }
+      finally { setIsTranscribing(false); }
+    } catch { /* 이미 중지된 경우 무시 */ }
   };
 
   const stopRecording = async () => {
     if (!recording) return;
-    setIsRecording(false);
-    await recording.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    const uri = recording.getURI();
-    setRecording(null);
-    if (!uri) return;
-
-    if (!apiKey) {
-      Alert.alert('API 키 필요', 'OpenAI Whisper 음성 인식을 위해 API 키가 필요합니다.', [
-        { text: '설정하기', onPress: () => setShowSettings(true) },
-        { text: '취소' },
-      ]);
-      return;
-    }
-    setIsTranscribing(true);
-    try {
-      const text = await transcribeWithWhisper(uri, apiKey);
-      if (text) { setInput(text); setTimeout(() => setItem(parseText(text)), 300); }
-      else { Alert.alert('알림', '음성을 인식하지 못했습니다.'); }
-    } catch (e: any) { Alert.alert('오류', e.message); }
-    finally { setIsTranscribing(false); }
+    silenceStart.current = null;
+    await stopRecordingAndTranscribe(recording);
   };
 
   const onConfirm = async () => {

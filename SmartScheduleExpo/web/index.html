@@ -291,7 +291,13 @@ function downloadICS(content,filename){
 
 // ─── Web Speech API ───────────────────────────────────────────────────────────
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let recognition=null,isRecording=false;
+let recognition=null,isRecording=false,silenceTimer=null;
+const SILENCE_MS=3000;
+
+function resetSilenceTimer(){
+  clearTimeout(silenceTimer);
+  silenceTimer=setTimeout(()=>{ if(isRecording)recognition.stop(); },SILENCE_MS);
+}
 
 function initRecognition(){
   if(!SR)return null;
@@ -306,6 +312,8 @@ function initRecognition(){
     document.getElementById('recordingBox').classList.add('show');
     const btn=document.getElementById('voiceBtn');
     btn.textContent='⏹ 중지';btn.classList.add('recording');
+    // 첫 발화 대기: 5초 내 말 없으면 자동 종료
+    silenceTimer=setTimeout(()=>{ if(isRecording)recognition.stop(); },5000);
   };
 
   r.onresult=(e)=>{
@@ -316,12 +324,13 @@ function initRecognition(){
     }
     const text=final||interim;
     document.getElementById('interimText').textContent=text;
-    if(final){
-      document.getElementById('inputText').value=final;
-    }
+    if(final) document.getElementById('inputText').value=final;
+    // 음성 감지 때마다 3초 타이머 리셋
+    resetSilenceTimer();
   };
 
   r.onend=()=>{
+    clearTimeout(silenceTimer);
     isRecording=false;
     document.getElementById('inputText').style.display='';
     document.getElementById('recordingBox').classList.remove('show');
@@ -333,6 +342,7 @@ function initRecognition(){
   };
 
   r.onerror=(e)=>{
+    clearTimeout(silenceTimer);
     isRecording=false;
     document.getElementById('inputText').style.display='';
     document.getElementById('recordingBox').classList.remove('show');
