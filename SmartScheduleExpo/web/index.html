@@ -225,50 +225,71 @@
 
 <script>
 // ─── NLP Parser ──────────────────────────────────────────────────────────────
-const CAL_KEYS=['회의','미팅','약속','세미나','강의','수업','면접','파티','행사','이벤트','콘서트','공연','발표','출장','여행','결혼식','모임'];
+const CAL_KEYS=['회의','미팅','약속','세미나','강의','수업','면접','파티','행사','이벤트','콘서트','공연','발표','출장','여행','결혼식','모임','교육','훈련','워크샵','강연','행사','수련회','세션'];
 const REM_KEYS=['잊지마','기억','할일','해야','반드시','잊지 마'];
-const WORK_KEYS=['보고서','제출','이메일','업무','회사','프로젝트','마감','기획서'];
+const WORK_KEYS=['보고서','제출','이메일','업무','회사','프로젝트','마감','기획서','취급','담당'];
 const SHOP_KEYS=['사야','구매','마트','쇼핑','장보기','구입','살','사다'];
 const HEALTH_KEYS=['병원','치과','한의원','진료','운동','헬스','조깅','검진'];
 const DAYS=[['월요일',1],['화요일',2],['수요일',3],['목요일',4],['금요일',5],['토요일',6],['일요일',0]];
 
 function hasTimeExpr(t){return/\d{1,2}시/.test(t);}
-function extractDate(t){
-  const now=new Date();let base=new Date(now);let hasDate=false,hasTime=false,hour=9,min=0;
+function extractDates(t){
+  const now=new Date();let start=new Date(now),end=null;
+  let hasDate=false,hasTime=false,hour=9,min=0;
   const isPM=t.includes('오후')||t.includes('저녁')||t.includes('밤');
-  if(t.includes('오늘')){hasDate=true;}
-  else if(t.includes('내일')){base.setDate(base.getDate()+1);hasDate=true;}
-  else if(t.includes('모레')){base.setDate(base.getDate()+2);hasDate=true;}
-  const md=t.match(/(\d{1,2})월\s*(\d{1,2})일/);
-  if(md){base=new Date(now.getFullYear(),parseInt(md[1])-1,parseInt(md[2]));hasDate=true;}
-  const isNext=t.includes('다음주')||t.includes('다음 주');
-  for(const[name,wd]of DAYS){
-    if(t.includes(name)){let ahead=wd-now.getDay();if(ahead<=0||isNext)ahead+=7;base=new Date(now);base.setDate(base.getDate()+ahead);hasDate=true;break;}
+
+  // M/D,M/D 또는 M/D~M/D 범위 (예: 8/20,8/21일 또는 8/20~8/21)
+  const mdRange=t.match(/(\d{1,2})\/(\d{1,2})일?[,，~\-](\d{1,2})\/(\d{1,2})일?/);
+  if(mdRange){
+    start=new Date(now.getFullYear(),parseInt(mdRange[1])-1,parseInt(mdRange[2]));
+    end=new Date(now.getFullYear(),parseInt(mdRange[3])-1,parseInt(mdRange[4]));
+    hasDate=true;
+  } else {
+    // M/D 단일 (예: 8/20일)
+    const mdS=t.match(/(\d{1,2})\/(\d{1,2})일?/);
+    if(mdS){start=new Date(now.getFullYear(),parseInt(mdS[1])-1,parseInt(mdS[2]));hasDate=true;}
+    // N월M일
+    const mdK=t.match(/(\d{1,2})월\s*(\d{1,2})일/);
+    if(mdK){start=new Date(now.getFullYear(),parseInt(mdK[1])-1,parseInt(mdK[2]));hasDate=true;}
+    if(t.includes('오늘')){hasDate=true;}
+    else if(t.includes('내일')){start.setDate(start.getDate()+1);hasDate=true;}
+    else if(t.includes('모레')){start.setDate(start.getDate()+2);hasDate=true;}
+    const isNext=t.includes('다음주')||t.includes('다음 주');
+    for(const[name,wd]of DAYS){
+      if(t.includes(name)){let ahead=wd-now.getDay();if(ahead<=0||isNext)ahead+=7;start=new Date(now);start.setDate(start.getDate()+ahead);hasDate=true;break;}
+    }
   }
   if(t.includes('저녁')&&!hasTimeExpr(t)){hour=18;hasTime=true;}
   else if(t.includes('아침')&&!hasTimeExpr(t)){hour=8;hasTime=true;}
   else if(t.includes('점심')&&!hasTimeExpr(t)){hour=12;hasTime=true;}
   const tm=t.match(/(\d{1,2})시(?:\s*(\d{1,2})분)?/);
   if(tm){hour=parseInt(tm[1]);if(tm[2])min=parseInt(tm[2]);if(isPM&&hour<12)hour+=12;if(!isPM&&!t.includes('오전')&&hour<9)hour+=12;hasTime=true;}
-  if(!hasDate&&!hasTime)return null;
-  const d=new Date(base);d.setHours(hasTime?hour:9,min,0,0);return d;
+  if(!hasDate&&!hasTime)return{start:null,end:null};
+  start.setHours(hasTime?hour:9,min,0,0);
+  if(end)end.setHours(17,0,0,0);
+  return{start,end};
 }
+function extractDate(t){return extractDates(t).start;}
 function extractTitle(t){
   let r=t;
-  [/다음\s*주\s*[가-힣]*요일/g,/이번\s*주\s*[가-힣]*요일/g,/[가-힣]*요일/g,/\d{1,2}월\s*\d{1,2}일/g,
-   /오늘|내일|모레|글피/g,/오전\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,/오후\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,
+  [/다음\s*주\s*[가-힣]*요일/g,/이번\s*주\s*[가-힣]*요일/g,/[가-힣]*요일/g,
+   /\d{1,2}\/\d{1,2}일?[,，~\-]\d{1,2}\/\d{1,2}일?/g,/\d{1,2}\/\d{1,2}일?/g,
+   /\d{1,2}월\s*\d{1,2}일/g,/오늘|내일|모레|글피/g,
+   /오전\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,/오후\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,
    /\d{1,2}시\s*\d{1,2}분/g,/\d{1,2}시/g,/오전|오후|저녁|아침|점심|밤/g
   ].forEach(p=>{r=r.replace(p,'');});
   return r.replace(/\s+/g,' ').trim()||t;
 }
 function parse(t){
   t=t.trim();if(!t)return null;
-  const date=extractDate(t),hasTime=hasTimeExpr(t);
+  const{start:date,end:endDate}=extractDates(t);
+  const hasTime=hasTimeExpr(t),isMultiDay=!!(endDate&&date&&endDate.toDateString()!==date.toDateString());
   const isCal=CAL_KEYS.some(k=>t.includes(k)),isRem=[...REM_KEYS,...SHOP_KEYS].some(k=>t.includes(k));
-  const type=isCal?'calendar':isRem?'reminder':hasTime?'calendar':'reminder';
+  // 날짜 범위가 있으면 캘린더 우선
+  const type=isMultiDay?'calendar':isCal?'calendar':isRem?'reminder':hasTime?'calendar':'reminder';
   const cat=WORK_KEYS.some(k=>t.includes(k))?'직장':SHOP_KEYS.some(k=>t.includes(k))?'쇼핑':HEALTH_KEYS.some(k=>t.includes(k))?'건강':'개인';
-  let conf=0.4;if(date)conf+=0.3;if(isCal||isRem)conf+=0.2;if(hasTime)conf+=0.1;
-  return{type,title:extractTitle(t),date,category:cat,confidence:conf};
+  let conf=0.4;if(date)conf+=0.3;if(isCal||isRem||isMultiDay)conf+=0.2;if(hasTime)conf+=0.1;
+  return{type,title:extractTitle(t),date,endDate,category:cat,confidence:conf};
 }
 
 // ─── ICS Generation ───────────────────────────────────────────────────────────
@@ -408,7 +429,7 @@ function renderResult(){
   document.querySelectorAll('.seg-btn').forEach(b=>{b.classList.toggle('active',b.dataset.type===type);});
   document.getElementById('titleInput').value=title;
   const dateEl=document.getElementById('dateDisplay');
-  dateEl.textContent=date?formatDate(date):'날짜 없음';
+  dateEl.textContent=date?(current.endDate?formatDate(date)+' ~ '+formatDate(current.endDate):formatDate(date)):'날짜 없음';
   document.getElementById('categorySection').style.display=type==='reminder'?'block':'none';
   document.querySelectorAll('.chip').forEach(c=>{c.classList.toggle('active',c.dataset.cat===category);});
   document.getElementById('confirmBtn').textContent=type==='calendar'?'📅 캘린더에 추가':'🔔 미리알림에 추가';
@@ -427,9 +448,9 @@ function onCancel(){
 function onConfirm(){
   if(!current)return;
   const title=document.getElementById('titleInput').value||current.title;
-  const{type,date,category}=current;
+  const{type,date,endDate,category}=current;
   if(type==='calendar'){
-    openCalendarICS(makeEventICS(title,date||new Date()));
+    openCalendarICS(makeEventICS(title,date||new Date(),endDate));
     showToast('캘린더 추가 화면이 열립니다');
   } else {
     openReminderICS(makeTodoICS(title,date));
