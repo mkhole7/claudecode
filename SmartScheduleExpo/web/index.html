@@ -237,26 +237,51 @@ function extractDates(t){
   const now=new Date();let start=new Date(now),end=null;
   let hasDate=false,hasTime=false,hour=9,min=0;
   const isPM=t.includes('오후')||t.includes('저녁')||t.includes('밤');
+  const SEP='[,，~～\\-]';
 
-  // M/D,M/D 또는 M/D~M/D 범위 (예: 8/20,8/21일 또는 8/20~8/21)
-  const mdRange=t.match(/(\d{1,2})\/(\d{1,2})일?[,，~\-](\d{1,2})\/(\d{1,2})일?/);
-  if(mdRange){
-    start=new Date(now.getFullYear(),parseInt(mdRange[1])-1,parseInt(mdRange[2]));
-    end=new Date(now.getFullYear(),parseInt(mdRange[3])-1,parseInt(mdRange[4]));
+  // 1) N월M일~N월M일 (한글 전체 범위, 예: 8월20일~9월1일)
+  const krFull=t.match(new RegExp('(\\d{1,2})월\\s*(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})월\\s*(\\d{1,2})일?'));
+  if(krFull){
+    start=new Date(now.getFullYear(),parseInt(krFull[1])-1,parseInt(krFull[2]));
+    end=new Date(now.getFullYear(),parseInt(krFull[3])-1,parseInt(krFull[4]));
     hasDate=true;
   } else {
-    // M/D 단일 (예: 8/20일)
-    const mdS=t.match(/(\d{1,2})\/(\d{1,2})일?/);
-    if(mdS){start=new Date(now.getFullYear(),parseInt(mdS[1])-1,parseInt(mdS[2]));hasDate=true;}
-    // N월M일
-    const mdK=t.match(/(\d{1,2})월\s*(\d{1,2})일/);
-    if(mdK){start=new Date(now.getFullYear(),parseInt(mdK[1])-1,parseInt(mdK[2]));hasDate=true;}
-    if(t.includes('오늘')){hasDate=true;}
-    else if(t.includes('내일')){start.setDate(start.getDate()+1);hasDate=true;}
-    else if(t.includes('모레')){start.setDate(start.getDate()+2);hasDate=true;}
-    const isNext=t.includes('다음주')||t.includes('다음 주');
-    for(const[name,wd]of DAYS){
-      if(t.includes(name)){let ahead=wd-now.getDay();if(ahead<=0||isNext)ahead+=7;start=new Date(now);start.setDate(start.getDate()+ahead);hasDate=true;break;}
+    // 2) N월M일?~D일? (한글 같은 달 범위, 예: 8월20~21, 8월20일~21일)
+    const krSame=t.match(new RegExp('(\\d{1,2})월\\s*(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})일?'));
+    if(krSame){
+      start=new Date(now.getFullYear(),parseInt(krSame[1])-1,parseInt(krSame[2]));
+      end=new Date(now.getFullYear(),parseInt(krSame[1])-1,parseInt(krSame[3]));
+      hasDate=true;
+    } else {
+      // 3) M/D~M/D (슬래시 전체 범위, 예: 8/20~8/21)
+      const mdFull=t.match(new RegExp('(\\d{1,2})\\/(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})\\/(\\d{1,2})일?'));
+      if(mdFull){
+        start=new Date(now.getFullYear(),parseInt(mdFull[1])-1,parseInt(mdFull[2]));
+        end=new Date(now.getFullYear(),parseInt(mdFull[3])-1,parseInt(mdFull[4]));
+        hasDate=true;
+      } else {
+        // 4) M/D~D (슬래시 같은 달 범위, 예: 8/20,21 또는 8/20~21)
+        const mdSame=t.match(new RegExp('(\\d{1,2})\\/(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})일?(?!\\/)'));
+        if(mdSame){
+          start=new Date(now.getFullYear(),parseInt(mdSame[1])-1,parseInt(mdSame[2]));
+          end=new Date(now.getFullYear(),parseInt(mdSame[1])-1,parseInt(mdSame[3]));
+          hasDate=true;
+        } else {
+          // 5) M/D 단일
+          const mdS=t.match(/(\d{1,2})\/(\d{1,2})일?/);
+          if(mdS){start=new Date(now.getFullYear(),parseInt(mdS[1])-1,parseInt(mdS[2]));hasDate=true;}
+          // 6) N월M일 단일
+          const mdK=t.match(/(\d{1,2})월\s*(\d{1,2})일?/);
+          if(mdK){start=new Date(now.getFullYear(),parseInt(mdK[1])-1,parseInt(mdK[2]));hasDate=true;}
+          if(t.includes('오늘')){hasDate=true;}
+          else if(t.includes('내일')){start.setDate(start.getDate()+1);hasDate=true;}
+          else if(t.includes('모레')){start.setDate(start.getDate()+2);hasDate=true;}
+          const isNext=t.includes('다음주')||t.includes('다음 주');
+          for(const[name,wd]of DAYS){
+            if(t.includes(name)){let ahead=wd-now.getDay();if(ahead<=0||isNext)ahead+=7;start=new Date(now);start.setDate(start.getDate()+ahead);hasDate=true;break;}
+          }
+        }
+      }
     }
   }
   if(t.includes('저녁')&&!hasTimeExpr(t)){hour=18;hasTime=true;}
@@ -272,9 +297,17 @@ function extractDates(t){
 function extractDate(t){return extractDates(t).start;}
 function extractTitle(t){
   let r=t;
+  const SEP='[,，~～\\-]';
   [/다음\s*주\s*[가-힣]*요일/g,/이번\s*주\s*[가-힣]*요일/g,/[가-힣]*요일/g,
-   /\d{1,2}\/\d{1,2}일?[,，~\-]\d{1,2}\/\d{1,2}일?/g,/\d{1,2}\/\d{1,2}일?/g,
-   /\d{1,2}월\s*\d{1,2}일/g,/오늘|내일|모레|글피/g,
+   // 한글 범위: N월M일?~N월M일?, N월M일?~D일?
+   new RegExp('\\d{1,2}월\\s*\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}월\\s*\\d{1,2}일?','g'),
+   new RegExp('\\d{1,2}월\\s*\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}일?','g'),
+   // 슬래시 범위: M/D~M/D, M/D~D
+   new RegExp('\\d{1,2}\\/\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}\\/\\d{1,2}일?','g'),
+   new RegExp('\\d{1,2}\\/\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}일?','g'),
+   // 단일
+   /\d{1,2}\/\d{1,2}일?/g,/\d{1,2}월\s*\d{1,2}일?/g,
+   /오늘|내일|모레|글피/g,
    /오전\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,/오후\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,
    /\d{1,2}시\s*\d{1,2}분/g,/\d{1,2}시/g,/오전|오후|저녁|아침|점심|밤/g
   ].forEach(p=>{r=r.replace(p,'');});
