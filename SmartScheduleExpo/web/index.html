@@ -291,14 +291,13 @@ function openICS(content,filename){
     window.location.href='ics?c='+encodeURIComponent(content)+'&f='+filename;
     return;
   }
-  // SW 미활성(첫 방문) → Web Share API
-  const blob=new Blob([content],{type:'text/calendar'});
-  const file=new File([blob],filename,{type:'text/calendar'});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({files:[file]}).catch(()=>{});
+  // iOS — SW 아직 준비 중 (자동 새로고침 후 재시도)
+  if(/iPhone|iPad|iPod/.test(navigator.userAgent)){
+    showToast('준비 중입니다. 잠시 후 페이지가 새로고침됩니다');
     return;
   }
   // 데스크탑 fallback
+  const blob=new Blob([content],{type:'text/calendar'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=filename;
   document.body.appendChild(a);a.click();document.body.removeChild(a);
@@ -460,9 +459,16 @@ function showToast(msg){
   toastTimer=setTimeout(()=>{el.style.opacity='0';},3000);
 }
 
-// Service Worker 등록
+// Service Worker 등록 — 첫 설치 후 자동 새로고침으로 즉시 활성화
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    const sw=reg.installing||reg.waiting;
+    if(sw){
+      sw.addEventListener('statechange',()=>{
+        if(sw.state==='activated') window.location.reload();
+      });
+    }
+  }).catch(()=>{});
 }
 </script>
 </body>
