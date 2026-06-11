@@ -281,10 +281,9 @@ function makeEventICS(title,start,end){
   return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nDTSTART:${s}\r\nDTEND:${e}\r\nSUMMARY:${title}\r\nEND:VEVENT\r\nEND:VCALENDAR`;
 }
 function makeTodoICS(title,due){
-  const start=due||new Date();
-  const s=icsDate(start),e=icsDate(new Date(start.getTime()+3600000));
+  const d=due?`\r\nDUE:${icsDate(due)}`:'';
   const now=icsDate(new Date());
-  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nDTSTART:${s}\r\nDTEND:${e}\r\nSUMMARY:${title}\r\nDESCRIPTION:미리알림\r\nBEGIN:VALARM\r\nTRIGGER:-PT0M\r\nACTION:DISPLAY\r\nDESCRIPTION:${title}\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR`;
+  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VTODO\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nSUMMARY:${title}${d}\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO\r\nEND:VCALENDAR`;
 }
 function openICS(content,filename){
   const blob=new Blob([content],{type:'text/calendar'});
@@ -417,7 +416,7 @@ function onConfirm(){
     showToast('캘린더 앱이 열리면 "추가"를 탭하세요');
   } else {
     openICS(makeTodoICS(title,date),'reminder.ics');
-    showToast('캘린더 앱이 열리면 "추가"를 탭하세요 (알림 포함)');
+    showToast('미리알림 앱이 열리면 "추가"를 탭하세요');
   }
   setTimeout(()=>{document.getElementById('inputText').value='';onCancel();},1500);
 }
