@@ -287,13 +287,13 @@ function makeTodoICS(title,due){
 }
 function openICS(content,filename){
   const blob=new Blob([content],{type:'text/calendar'});
-  const url=URL.createObjectURL(blob);
-  // iOS: blob URL로 직접 이동 → Safari가 캘린더 앱으로 연결
-  if(/iPhone|iPad|iPod/.test(navigator.userAgent)){
-    window.location.href=url;
+  const file=new File([blob],filename,{type:'text/calendar'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file]}).catch(()=>{});
     return;
   }
-  // 데스크탑: 다운로드
+  // 데스크탑 fallback
+  const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=filename;
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -411,14 +411,14 @@ function onConfirm(){
   if(!current)return;
   const title=document.getElementById('titleInput').value||current.title;
   const{type,date,category}=current;
+  const appName=type==='calendar'?'캘린더':'미리알림';
   if(type==='calendar'){
     openICS(makeEventICS(title,date||new Date()),'event.ics');
-    showToast('캘린더 앱이 열리면 "추가"를 탭하세요');
   } else {
     openICS(makeTodoICS(title,date),'reminder.ics');
-    showToast('미리알림 앱이 열리면 "추가"를 탭하세요');
   }
-  setTimeout(()=>{document.getElementById('inputText').value='';onCancel();},1500);
+  showIosGuide(appName);
+  setTimeout(()=>{document.getElementById('inputText').value='';onCancel();},500);
 }
 
 function fillExample(text){document.getElementById('inputText').value=text;}
@@ -428,6 +428,21 @@ function formatDate(d){
   let h=d.getHours();const m=String(d.getMinutes()).padStart(2,'0');
   const ap=h>=12?'오후':'오전';h=h%12||12;
   return`${d.getMonth()+1}월 ${d.getDate()}일 (${dow}) ${ap} ${h}:${m}`;
+}
+
+function showIosGuide(appName){
+  let el=document.getElementById('iosGuide');
+  if(!el){
+    el=document.createElement('div');el.id='iosGuide';
+    el.style.cssText='position:fixed;bottom:80px;left:16px;right:16px;background:#1c1c1e;color:#fff;border-radius:14px;padding:16px;font-size:14px;line-height:1.6;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML=`<div style="font-weight:600;margin-bottom:8px">📲 ${appName}에 추가하는 방법</div>`+
+    `<div>① 공유 시트에서 <b>"파일에 저장"</b> 탭</div>`+
+    `<div>② <b>파일(Files) 앱</b> 열기</div>`+
+    `<div>③ 저장된 <b>.ics 파일</b> 탭 → "${appName}에 추가" 선택</div>`+
+    `<div style="margin-top:10px;text-align:right"><button onclick="document.getElementById('iosGuide').remove()" style="background:#0a84ff;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px">닫기</button></div>`;
+  el.style.display='block';
 }
 
 let toastTimer=null;
