@@ -286,6 +286,12 @@ function makeTodoICS(title,due){
   return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VTODO\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nSUMMARY:${title}${d}\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO\r\nEND:VCALENDAR`;
 }
 function openICS(content,filename){
+  // Service Worker 활성 시 → HTTPS URL로 이동, iOS가 캘린더/미리알림 추가 화면 바로 표시
+  if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+    window.location.href='ics?c='+encodeURIComponent(content)+'&f='+filename;
+    return;
+  }
+  // SW 미활성(첫 방문) → Web Share API
   const blob=new Blob([content],{type:'text/calendar'});
   const file=new File([blob],filename,{type:'text/calendar'});
   if(navigator.canShare&&navigator.canShare({files:[file]})){
@@ -411,13 +417,13 @@ function onConfirm(){
   if(!current)return;
   const title=document.getElementById('titleInput').value||current.title;
   const{type,date,category}=current;
-  const appName=type==='calendar'?'캘린더':'미리알림';
   if(type==='calendar'){
     openICS(makeEventICS(title,date||new Date()),'event.ics');
+    showToast('캘린더 추가 화면이 열립니다');
   } else {
     openICS(makeTodoICS(title,date),'reminder.ics');
+    showToast('미리알림 추가 화면이 열립니다');
   }
-  showIosGuide(appName);
   setTimeout(()=>{document.getElementById('inputText').value='';onCancel();},500);
 }
 
@@ -452,6 +458,11 @@ function showToast(msg){
   el.textContent=msg;el.style.opacity='1';
   if(toastTimer)clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>{el.style.opacity='0';},3000);
+}
+
+// Service Worker 등록
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 </script>
 </body>
