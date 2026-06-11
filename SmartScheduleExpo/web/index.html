@@ -274,26 +274,30 @@ function parse(t){
 // ─── ICS Generation ───────────────────────────────────────────────────────────
 function pad(n){return String(n).padStart(2,'0');}
 function icsDate(d){return`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;}
+function uid(){return Date.now()+'@smartschedule';}
 function makeEventICS(title,start,end){
   const s=icsDate(start),e=icsDate(end||new Date(start.getTime()+3600000));
-  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:${s}\r\nDTEND:${e}\r\nSUMMARY:${title}\r\nEND:VEVENT\r\nEND:VCALENDAR`;
+  const now=icsDate(new Date());
+  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nDTSTART:${s}\r\nDTEND:${e}\r\nSUMMARY:${title}\r\nEND:VEVENT\r\nEND:VCALENDAR`;
 }
 function makeTodoICS(title,due){
-  const d=due?`\r\nDUE:${icsDate(due)}`:'';
-  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nBEGIN:VTODO\r\nSUMMARY:${title}${d}\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO\r\nEND:VCALENDAR`;
+  const start=due||new Date();
+  const s=icsDate(start),e=icsDate(new Date(start.getTime()+3600000));
+  const now=icsDate(new Date());
+  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nDTSTART:${s}\r\nDTEND:${e}\r\nSUMMARY:${title}\r\nDESCRIPTION:미리알림\r\nBEGIN:VALARM\r\nTRIGGER:-PT0M\r\nACTION:DISPLAY\r\nDESCRIPTION:${title}\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR`;
 }
 function openICS(content,filename){
-  const blob=new Blob([content],{type:'text/calendar;charset=utf-8'});
-  const file=new File([blob],filename,{type:'text/calendar;charset=utf-8'});
-  // Web Share API: iOS Safari 공유 시트 (캘린더에 추가 옵션 포함)
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({files:[file]}).catch(()=>{});
+  const blob=new Blob([content],{type:'text/calendar'});
+  const url=URL.createObjectURL(blob);
+  // iOS: blob URL로 직접 이동 → Safari가 캘린더 앱으로 연결
+  if(/iPhone|iPad|iPod/.test(navigator.userAgent)){
+    window.location.href=url;
     return;
   }
-  // 데스크탑: blob URL 다운로드
-  const url=URL.createObjectURL(blob);
+  // 데스크탑: 다운로드
   const a=document.createElement('a');a.href=url;a.download=filename;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 // ─── Web Speech API ───────────────────────────────────────────────────────────
@@ -410,10 +414,10 @@ function onConfirm(){
   const{type,date,category}=current;
   if(type==='calendar'){
     openICS(makeEventICS(title,date||new Date()),'event.ics');
-    showToast('공유 메뉴에서 "캘린더에 추가"를 선택하세요');
+    showToast('캘린더 앱이 열리면 "추가"를 탭하세요');
   } else {
     openICS(makeTodoICS(title,date),'reminder.ics');
-    showToast('공유 메뉴에서 "미리알림" 또는 "캘린더에 추가"를 선택하세요');
+    showToast('캘린더 앱이 열리면 "추가"를 탭하세요 (알림 포함)');
   }
   setTimeout(()=>{document.getElementById('inputText').value='';onCancel();},1500);
 }
