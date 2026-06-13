@@ -16,36 +16,70 @@ interface ParsedItem {
   type: ScheduleType;
   title: string;
   date: Date | null;
+  endDate?: Date | null;
   category: ReminderCategory;
   confidence: number;
 }
 
 // ─── NLP Parser ───────────────────────────────────────────────────────────────
 
-const CAL_KEYS = ['회의', '미팅', '약속', '세미나', '강의', '수업', '면접', '파티', '행사', '이벤트', '콘서트', '공연', '발표', '출장', '여행', '결혼식', '모임'];
+const CAL_KEYS = ['회의', '미팅', '약속', '세미나', '강의', '수업', '면접', '파티', '행사', '이벤트', '콘서트', '공연', '발표', '출장', '여행', '결혼식', '모임', '교육', '훈련', '워크샵', '강연', '수련회', '세션'];
 const REM_KEYS = ['잊지마', '기억', '할일', '해야', '반드시', '잊지 마'];
-const WORK_KEYS = ['보고서', '제출', '이메일', '업무', '회사', '프로젝트', '마감', '기획서'];
+const WORK_KEYS = ['보고서', '제출', '이메일', '업무', '회사', '프로젝트', '마감', '기획서', '취급', '담당'];
 const SHOP_KEYS = ['사야', '구매', '마트', '쇼핑', '장보기', '구입', '살', '사다'];
 const HEALTH_KEYS = ['병원', '치과', '한의원', '진료', '운동', '헬스', '조깅', '검진'];
 const DAYS: [string, number][] = [['월요일', 1], ['화요일', 2], ['수요일', 3], ['목요일', 4], ['금요일', 5], ['토요일', 6], ['일요일', 0]];
 
 function hasTimeExpr(t: string) { return /\d{1,2}시/.test(t); }
 
-function extractDate(t: string): Date | null {
+const SEP = '[,，~～\\-]';
+
+function extractDates(t: string): { start: Date | null; end: Date | null } {
   const now = new Date();
-  let base = new Date(now);
+  let start = new Date(now), end: Date | null = null;
   let hasDate = false, hasTime = false, hour = 9, min = 0;
   const isPM = t.includes('오후') || t.includes('저녁') || t.includes('밤');
-  if (t.includes('오늘')) { hasDate = true; }
-  else if (t.includes('내일')) { base.setDate(base.getDate() + 1); hasDate = true; }
-  else if (t.includes('모레')) { base.setDate(base.getDate() + 2); hasDate = true; }
-  const md = t.match(/(\d{1,2})월\s*(\d{1,2})일/);
-  if (md) { base = new Date(now.getFullYear(), parseInt(md[1]) - 1, parseInt(md[2])); hasDate = true; }
-  const isNext = t.includes('다음주') || t.includes('다음 주');
-  for (const [name, wd] of DAYS) {
-    if (t.includes(name)) {
-      let ahead = wd - now.getDay(); if (ahead <= 0 || isNext) ahead += 7;
-      base = new Date(now); base.setDate(base.getDate() + ahead); hasDate = true; break;
+
+  const krFull = t.match(new RegExp(`(\\d{1,2})월\\s*(\\d{1,2})일?\\s*${SEP}\\s*(\\d{1,2})월\\s*(\\d{1,2})일?`));
+  if (krFull) {
+    start = new Date(now.getFullYear(), parseInt(krFull[1]) - 1, parseInt(krFull[2]));
+    end = new Date(now.getFullYear(), parseInt(krFull[3]) - 1, parseInt(krFull[4]));
+    hasDate = true;
+  } else {
+    const krSame = t.match(new RegExp(`(\\d{1,2})월\\s*(\\d{1,2})일?\\s*${SEP}\\s*(\\d{1,2})일?`));
+    if (krSame) {
+      start = new Date(now.getFullYear(), parseInt(krSame[1]) - 1, parseInt(krSame[2]));
+      end = new Date(now.getFullYear(), parseInt(krSame[1]) - 1, parseInt(krSame[3]));
+      hasDate = true;
+    } else {
+      const mdFull = t.match(new RegExp(`(\\d{1,2})\\/(\\d{1,2})일?\\s*${SEP}\\s*(\\d{1,2})\\/(\\d{1,2})일?`));
+      if (mdFull) {
+        start = new Date(now.getFullYear(), parseInt(mdFull[1]) - 1, parseInt(mdFull[2]));
+        end = new Date(now.getFullYear(), parseInt(mdFull[3]) - 1, parseInt(mdFull[4]));
+        hasDate = true;
+      } else {
+        const mdSame = t.match(new RegExp(`(\\d{1,2})\\/(\\d{1,2})일?\\s*${SEP}\\s*(\\d{1,2})일?(?!\\/)`));
+        if (mdSame) {
+          start = new Date(now.getFullYear(), parseInt(mdSame[1]) - 1, parseInt(mdSame[2]));
+          end = new Date(now.getFullYear(), parseInt(mdSame[1]) - 1, parseInt(mdSame[3]));
+          hasDate = true;
+        } else {
+          const mdS = t.match(/(\d{1,2})\/(\d{1,2})일?/);
+          if (mdS) { start = new Date(now.getFullYear(), parseInt(mdS[1]) - 1, parseInt(mdS[2])); hasDate = true; }
+          const mdK = t.match(/(\d{1,2})월\s*(\d{1,2})일?/);
+          if (mdK) { start = new Date(now.getFullYear(), parseInt(mdK[1]) - 1, parseInt(mdK[2])); hasDate = true; }
+          if (t.includes('오늘')) { hasDate = true; }
+          else if (t.includes('내일')) { start.setDate(start.getDate() + 1); hasDate = true; }
+          else if (t.includes('모레')) { start.setDate(start.getDate() + 2); hasDate = true; }
+          const isNext = t.includes('다음주') || t.includes('다음 주');
+          for (const [name, wd] of DAYS) {
+            if (t.includes(name)) {
+              let ahead = wd - now.getDay(); if (ahead <= 0 || isNext) ahead += 7;
+              start = new Date(now); start.setDate(start.getDate() + ahead); hasDate = true; break;
+            }
+          }
+        }
+      }
     }
   }
   if (t.includes('저녁') && !hasTimeExpr(t)) { hour = 18; hasTime = true; }
@@ -58,29 +92,39 @@ function extractDate(t: string): Date | null {
     if (!isPM && !t.includes('오전') && hour < 9) hour += 12;
     hasTime = true;
   }
-  if (!hasDate && !hasTime) return null;
-  const d = new Date(base); d.setHours(hasTime ? hour : 9, min, 0, 0); return d;
+  if (!hasDate && !hasTime) return { start: null, end: null };
+  start.setHours(hasTime ? hour : 9, min, 0, 0);
+  if (end) end.setHours(17, 0, 0, 0);
+  return { start, end };
 }
 
 function extractTitle(t: string): string {
   let r = t;
-  [/다음\s*주\s*[가-힣]*요일/g, /이번\s*주\s*[가-힣]*요일/g, /[가-힣]*요일/g,
-   /\d{1,2}월\s*\d{1,2}일/g, /오늘|내일|모레|글피/g,
-   /오전\s*\d{1,2}시(?:\s*\d{1,2}분)?/g, /오후\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,
-   /\d{1,2}시\s*\d{1,2}분/g, /\d{1,2}시/g, /오전|오후|저녁|아침|점심|밤/g,
-  ].forEach(p => { r = r.replace(p, ''); });
+  ([
+    /다음\s*주\s*[가-힣]*요일/g, /이번\s*주\s*[가-힣]*요일/g, /[가-힣]*요일/g,
+    new RegExp(`\\d{1,2}월\\s*\\d{1,2}일?\\s*${SEP}\\s*\\d{1,2}월\\s*\\d{1,2}일?`, 'g'),
+    new RegExp(`\\d{1,2}월\\s*\\d{1,2}일?\\s*${SEP}\\s*\\d{1,2}일?`, 'g'),
+    new RegExp(`\\d{1,2}\\/\\d{1,2}일?\\s*${SEP}\\s*\\d{1,2}\\/\\d{1,2}일?`, 'g'),
+    new RegExp(`\\d{1,2}\\/\\d{1,2}일?\\s*${SEP}\\s*\\d{1,2}일?`, 'g'),
+    /\d{1,2}\/\d{1,2}일?/g, /\d{1,2}월\s*\d{1,2}일?/g,
+    /오늘|내일|모레|글피/g,
+    /오전\s*\d{1,2}시(?:\s*\d{1,2}분)?/g, /오후\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,
+    /\d{1,2}시\s*\d{1,2}분/g, /\d{1,2}시/g, /오전|오후|저녁|아침|점심|밤/g,
+  ] as RegExp[]).forEach(p => { r = r.replace(p, ''); });
   return r.replace(/\s+/g, ' ').trim() || t;
 }
 
 function parseText(t: string): ParsedItem | null {
   t = t.trim(); if (!t) return null;
-  const date = extractDate(t), hasTime = hasTimeExpr(t);
+  const { start: date, end: endDate } = extractDates(t);
+  const hasTime = hasTimeExpr(t);
+  const isMultiDay = !!(endDate && date && endDate.toDateString() !== date.toDateString());
   const isCal = CAL_KEYS.some(k => t.includes(k));
   const isRem = [...REM_KEYS, ...SHOP_KEYS].some(k => t.includes(k));
-  const type: ScheduleType = isCal ? 'calendar' : isRem ? 'reminder' : hasTime ? 'calendar' : 'reminder';
+  const type: ScheduleType = isMultiDay ? 'calendar' : isCal ? 'calendar' : isRem ? 'reminder' : hasTime ? 'calendar' : 'reminder';
   const category: ReminderCategory = WORK_KEYS.some(k => t.includes(k)) ? '직장' : SHOP_KEYS.some(k => t.includes(k)) ? '쇼핑' : HEALTH_KEYS.some(k => t.includes(k)) ? '건강' : '개인';
-  let conf = 0.4; if (date) conf += 0.3; if (isCal || isRem) conf += 0.2; if (hasTime) conf += 0.1;
-  return { type, title: extractTitle(t), date, category, confidence: conf };
+  let conf = 0.4; if (date) conf += 0.3; if (isCal || isRem || isMultiDay) conf += 0.2; if (hasTime) conf += 0.1;
+  return { type, title: extractTitle(t), date, endDate, category, confidence: conf };
 }
 
 // ─── Calendar Service ─────────────────────────────────────────────────────────
@@ -95,9 +139,9 @@ async function saveToCalendar(item: ParsedItem) {
   if (status !== 'granted') throw new Error('캘린더 접근 권한이 없습니다.');
   const id = await getCalendarId();
   const start = item.date ?? new Date();
+  const endDate = item.endDate ?? new Date(start.getTime() + 3600000);
   await Calendar.createEventAsync(id, {
-    title: item.title, startDate: start,
-    endDate: new Date(start.getTime() + 3600000),
+    title: item.title, startDate: start, endDate,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
 }
@@ -373,7 +417,13 @@ export default function App() {
             <Text style={S.label}>제목</Text>
             <TextInput style={S.titleInput} value={item.title} onChangeText={v => setItem({ ...item, title: v })} />
             <Text style={S.label}>날짜/시간</Text>
-            <Text style={S.value}>🕐 {item.date ? fmtDate(item.date) : '날짜 없음'}</Text>
+            <Text style={S.value}>
+              {item.date
+                ? (item.endDate && item.endDate.toDateString() !== item.date.toDateString()
+                    ? `📅 ${fmtDate(item.date)} ~ ${fmtDate(item.endDate)}`
+                    : `🕐 ${fmtDate(item.date)}`)
+                : '날짜 없음'}
+            </Text>
             {item.type === 'reminder' && (
               <>
                 <Text style={S.label}>목록</Text>
