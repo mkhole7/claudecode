@@ -600,17 +600,45 @@ function fileToBase64(file){
   });
 }
 
+function resizeImage(file,maxPx=1536){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      let{width:w,height:h}=img;
+      if(w<=maxPx&&h<=maxPx){
+        // 원본 크기 그대로 base64
+        const reader=new FileReader();
+        reader.onload=()=>resolve({base64:reader.result.split(',')[1],mimeType:file.type});
+        reader.onerror=reject;
+        reader.readAsDataURL(file);
+        return;
+      }
+      const ratio=Math.min(maxPx/w,maxPx/h);
+      w=Math.round(w*ratio);h=Math.round(h*ratio);
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl=canvas.toDataURL('image/jpeg',0.85);
+      resolve({base64:dataUrl.split(',')[1],mimeType:'image/jpeg'});
+    };
+    img.onerror=reject;
+    img.src=url;
+  });
+}
+
 async function onImageSelected(e){
   const file=e.target.files[0];if(!file)return;
   e.target.value='';
   const btn=document.getElementById('imageBtn');
   btn.textContent='⏳ 분석 중…';btn.disabled=true;
   try{
-    const base64=await fileToBase64(file);
-    const result=await analyzeWithVision(base64,file.type);
+    const{base64,mimeType}=await resizeImage(file);
+    const result=await analyzeWithVision(base64,mimeType);
     applyVisionResult(result);
   }catch(err){
-    showToast('오류: '+err.message);
+    alert('이미지 분석 오류\n\n'+err.message);
   }finally{
     btn.textContent='📷 이미지';btn.disabled=false;
   }
@@ -631,10 +659,17 @@ async function analyzeWithVision(base64,mimeType){
       ]}]
     })
   });
-  if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'API 오류');}
+  if(!res.ok){
+    let msg='API 오류 (HTTP '+res.status+')';
+    try{const err=await res.json();msg=err.error?.message||msg;}catch{}
+    throw new Error(msg);
+  }
   const data=await res.json();
   const text=data.choices[0].message.content.trim().replace(/^```(?:json)?\n?/,'').replace(/\n?```$/,'');
-  return JSON.parse(text);
+  let parsed;
+  try{parsed=JSON.parse(text);}
+  catch{throw new Error('응답 파싱 실패:\n'+text.slice(0,200));}
+  return parsed;
 }
 
 function applyVisionResult(r){
