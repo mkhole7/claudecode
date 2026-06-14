@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "스마트 일정관리",
+    "slug": "SmartScheduleExpo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.smartschedule.expo"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "plugins": [
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "일정을 캘린더에 추가하기 위해 접근 권한이 필요합니다.",
+          "remindersPermission": "할 일을 미리알림에 추가하기 위해 접근 권한이 필요합니다."
+        }
+      ]
+    ]
+  }
+}

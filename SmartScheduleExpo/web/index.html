@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="스마트 일정">
+  <title>스마트 일정관리</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      background: #F2F2F7; min-height: 100vh; color: #1C1C1E;
+    }
+    .scroll { padding: 60px 16px 40px; max-width: 480px; margin: 0 auto; }
+    .title-row { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+    h1 { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+    .sub { font-size: 14px; color: #6E6E73; }
+
+    .card {
+      background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 16px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+
+    textarea {
+      width: 100%; min-height: 90px; border: 1px solid #E5E5EA;
+      border-radius: 10px; padding: 12px; font-size: 15px;
+      font-family: inherit; background: #F9F9FB;
+      resize: none; outline: none; display: block;
+    }
+    textarea:focus { border-color: #007AFF; }
+
+    /* Recording box */
+    .recording-box {
+      width: 100%; min-height: 90px; border: 1px solid #FFD0D0;
+      border-radius: 10px; padding: 12px; background: #FFF5F5;
+      display: none; margin-bottom: 0;
+    }
+    .recording-box.show { display: block; }
+    .recording-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .pulse-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: #FF3B30;
+      animation: pulse 1s ease-in-out infinite; flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.75); }
+    }
+    .recording-label { color: #FF3B30; font-weight: 500; font-size: 15px; }
+    .interim-text { font-size: 15px; color: #1C1C1E; margin-top: 4px; min-height: 20px; }
+
+    .input-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .btn {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px; padding: 13px 16px; border: none;
+      border-radius: 12px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.15s; font-family: inherit;
+    }
+    .btn:active { opacity: 0.75; }
+    .btn-blue { background: #007AFF; color: #fff; flex: 1; }
+    .btn-voice { background: #F2F2F7; color: #1C1C1E; white-space: nowrap; }
+    .btn-voice.recording { background: #FF3B30; color: #fff; }
+    .btn-light { background: #F2F2F7; color: #1C1C1E; }
+    .btn:disabled { background: #C7C7CC; color: #fff; cursor: not-allowed; }
+
+    .divider { height: 1px; background: #E5E5EA; margin: 12px 0; }
+    .row-between { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+
+    .badge { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; }
+    .badge-green { background: rgba(52,199,89,0.15); color: #1C1C1E; }
+    .badge-orange { background: rgba(255,159,10,0.15); color: #1C1C1E; }
+
+    .label { font-size: 12px; color: #8E8E93; font-weight: 500; margin-bottom: 6px; }
+    .field-value { font-size: 15px; margin-bottom: 12px; }
+
+    .seg { display: flex; background: #F2F2F7; border-radius: 10px; padding: 2px; margin-bottom: 12px; }
+    .seg-btn {
+      flex: 1; padding: 8px; text-align: center; border: none;
+      background: transparent; border-radius: 8px; font-size: 14px;
+      color: #8E8E93; cursor: pointer; font-family: inherit; font-weight: 500;
+    }
+    .seg-btn.active {
+      background: #fff; color: #1C1C1E; font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .title-input {
+      width: 100%; border: 1px solid #E5E5EA; border-radius: 8px;
+      padding: 10px; font-size: 15px; font-family: inherit;
+      outline: none; margin-bottom: 12px;
+    }
+    .title-input:focus { border-color: #007AFF; }
+
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+    .chip {
+      white-space: nowrap; padding: 7px 14px; border-radius: 20px;
+      background: #F2F2F7; border: none; font-size: 14px; font-family: inherit; cursor: pointer;
+    }
+    .chip.active { background: #007AFF; color: #fff; font-weight: 600; }
+
+    .action-row { display: flex; gap: 10px; }
+    .action-row .btn-light { flex: 0; padding: 13px 20px; }
+    .action-row .btn-blue { flex: 1; }
+
+    .ex-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #F2F2F7; cursor: pointer; }
+    .ex-row:last-child { border-bottom: none; }
+    .ex-icon { font-size: 18px; margin-right: 10px; flex-shrink: 0; }
+    .ex-text { flex: 1; font-size: 14px; color: #3C3C43; }
+    .ex-arrow { font-size: 14px; color: #C7C7CC; }
+
+    .hidden { display: none !important; }
+
+    /* Voice not supported badge */
+    .voice-unsupported { font-size: 12px; color: #FF3B30; padding: 4px 8px; background: rgba(255,59,48,0.1); border-radius: 8px; }
+
+    .toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.8); color: #fff; padding: 12px 20px;
+      border-radius: 20px; font-size: 14px; z-index: 1000; white-space: nowrap;
+      transition: opacity 0.3s; pointer-events: none;
+    }
+
+    /* Settings */
+    .settings-btn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 2000; display: flex; align-items: flex-end;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-sheet { background: #fff; border-radius: 20px 20px 0 0; padding: 20px 16px 40px; width: 100%; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-title { font-size: 18px; font-weight: 700; }
+    .modal-close { font-size: 16px; color: #007AFF; font-weight: 600; border: none; background: none; cursor: pointer; padding: 0; }
+    .modal-desc { font-size: 13px; color: #6E6E73; line-height: 1.6; margin-bottom: 12px; }
+    .api-input {
+      width: 100%; border: 1px solid #E5E5EA; border-radius: 10px;
+      padding: 12px; font-size: 14px; font-family: monospace; outline: none; margin-bottom: 12px;
+    }
+    .api-input:focus { border-color: #007AFF; }
+    .btn-img { background: #F2F2F7; color: #1C1C1E; white-space: nowrap; }
+    .location-box {
+      font-size: 14px; color: #3C3C43; margin-bottom: 12px;
+      padding: 8px 12px; background: #F9F9FB; border-radius: 8px; line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+<div class="scroll">
+  <div class="title-row">
+    <div>
+      <h1>📋 스마트 일정관리</h1>
+      <p class="sub">자연어 · 🎤 음성 · 📷 이미지로 캘린더/미리알림 자동 등록</p>
+    </div>
+    <button class="settings-btn" onclick="openSettings()" title="API 키 설정">⚙️</button>
+  </div>
+
+  <!-- Input -->
+  <div class="card">
+    <div class="card-title">✏️ 일정 입력</div>
+
+    <textarea id="inputText" placeholder="텍스트 입력 또는 🎤 버튼으로 음성 입력"></textarea>
+
+    <!-- Recording box (shown when recording) -->
+    <div class="recording-box" id="recordingBox">
+      <div class="recording-row">
+        <div class="pulse-dot"></div>
+        <span class="recording-label">듣는 중... 말씀해 주세요</span>
+      </div>
+      <div class="interim-text" id="interimText"></div>
+    </div>
+
+    <div class="input-actions">
+      <button class="btn btn-voice" id="voiceBtn" onclick="toggleVoice()">🎤 음성</button>
+      <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="onImageSelected(event)">
+      <button class="btn btn-img" id="imageBtn" onclick="triggerImagePick()">📷 이미지</button>
+      <button class="btn btn-blue" onclick="onParse()" id="parseBtn">✨ 분석</button>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="card hidden" id="resultCard">
+    <div class="row-between">
+      <div class="card-title" style="margin-bottom:0">🔍 분석 결과</div>
+      <div class="badge" id="confidenceBadge"></div>
+    </div>
+    <div class="divider"></div>
+
+    <div class="label">종류</div>
+    <div class="seg" id="typeSeg">
+      <button class="seg-btn" data-type="calendar" onclick="setType('calendar')">📅 캘린더</button>
+      <button class="seg-btn" data-type="reminder" onclick="setType('reminder')">🔔 미리알림</button>
+    </div>
+
+    <div class="label">제목</div>
+    <input class="title-input" id="titleInput" type="text">
+
+    <div class="label">날짜/시간</div>
+    <div class="field-value" id="dateDisplay"></div>
+
+    <div id="locationSection" class="hidden">
+      <div class="label">장소</div>
+      <div class="location-box" id="locationDisplay"></div>
+    </div>
+
+    <div id="categorySection">
+      <div class="label">목록</div>
+      <div class="chips" id="catChips">
+        <button class="chip" data-cat="개인" onclick="setCat('개인')">👤 개인</button>
+        <button class="chip" data-cat="직장" onclick="setCat('직장')">💼 직장</button>
+        <button class="chip" data-cat="쇼핑" onclick="setCat('쇼핑')">🛒 쇼핑</button>
+        <button class="chip" data-cat="건강" onclick="setCat('건강')">❤️ 건강</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="action-row">
+      <button class="btn btn-light" onclick="onCancel()">취소</button>
+      <button class="btn btn-blue" id="confirmBtn" onclick="onConfirm()">📅 캘린더에 추가</button>
+    </div>
+  </div>
+
+  <!-- Examples -->
+  <div class="card" id="examplesCard">
+    <div class="card-title">💡 예시 (탭하면 입력)</div>
+    <div class="ex-row" onclick="fillExample('내일 오후 3시에 팀 미팅')">
+      <span class="ex-icon">📅</span><span class="ex-text">내일 오후 3시에 팀 미팅</span><span class="ex-arrow">↖</span>
+    </div>
+    <div class="ex-row" onclick="fillExample('다음주 월요일 오전 10시 치과 예약')">
+      <span class="ex-icon">📅</span><span class="ex-text">다음주 월요일 오전 10시 치과 예약</span><span class="ex-arrow">↖</span>
+    </div>
+    <div class="ex-row" onclick="fillExample('이번 주 금요일까지 보고서 제출')">
+      <span class="ex-icon">💼</span><span class="ex-text">이번 주 금요일까지 보고서 제출</span><span class="ex-arrow">↖</span>
+    </div>
+    <div class="ex-row" onclick="fillExample('마트에서 우유, 계란, 두부 사기')">
+      <span class="ex-icon">🛒</span><span class="ex-text">마트에서 우유, 계란, 두부 사기</span><span class="ex-arrow">↖</span>
+    </div>
+    <div class="ex-row" onclick="fillExample('오늘 저녁 6시 헬스장 운동')">
+      <span class="ex-icon">🏃</span><span class="ex-text">오늘 저녁 6시 헬스장 운동</span><span class="ex-arrow">↖</span>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="card">
+    <div class="card-title">📱 사용 방법</div>
+    <p style="font-size:14px;color:#3C3C43;line-height:1.7">
+      <strong>텍스트 입력</strong>: 직접 입력 후 분석하기<br>
+      <strong>🎤 음성 입력</strong>: 버튼 탭 → 말하기 → 자동 분석<br>
+      <strong>결과 확인</strong>: 종류/제목/날짜 수정 가능<br>
+      <strong>추가</strong>: .ics 파일 → iOS 캘린더 자동 등록 ✓
+    </p>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay hidden" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">⚙️ OpenAI API 키</span>
+      <button class="modal-close" onclick="closeSettings()">완료</button>
+    </div>
+    <p class="modal-desc">
+      📷 이미지 분석(GPT-4o) · 🎤 음성 인식(Whisper)에 사용됩니다.<br>
+      platform.openai.com → API keys에서 발급받으세요.
+    </p>
+    <input class="api-input" id="apiKeyInput" type="password" placeholder="sk-..." autocapitalize="none" autocomplete="off">
+    <button class="btn btn-blue" style="width:100%" onclick="saveSettings()">저장</button>
+  </div>
+</div>
+
+<script>
+// ─── NLP Parser ──────────────────────────────────────────────────────────────
+const CAL_KEYS=['회의','미팅','약속','세미나','강의','수업','면접','파티','행사','이벤트','콘서트','공연','발표','출장','여행','결혼식','모임','교육','훈련','워크샵','강연','행사','수련회','세션'];
+const REM_KEYS=['잊지마','기억','할일','해야','반드시','잊지 마'];
+const WORK_KEYS=['보고서','제출','이메일','업무','회사','프로젝트','마감','기획서','취급','담당'];
+const SHOP_KEYS=['사야','구매','마트','쇼핑','장보기','구입','살','사다'];
+const HEALTH_KEYS=['병원','치과','한의원','진료','운동','헬스','조깅','검진'];
+const DAYS=[['월요일',1],['화요일',2],['수요일',3],['목요일',4],['금요일',5],['토요일',6],['일요일',0]];
+
+function hasTimeExpr(t){return/\d{1,2}시/.test(t);}
+function extractDates(t){
+  const now=new Date();let start=new Date(now),end=null;
+  let hasDate=false,hasTime=false,hour=9,min=0;
+  const isPM=t.includes('오후')||t.includes('저녁')||t.includes('밤');
+  const SEP='[,，~～\\-]';
+
+  // 1) N월M일~N월M일 (한글 전체 범위, 예: 8월20일~9월1일)
+  const krFull=t.match(new RegExp('(\\d{1,2})월\\s*(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})월\\s*(\\d{1,2})일?'));
+  if(krFull){
+    start=new Date(now.getFullYear(),parseInt(krFull[1])-1,parseInt(krFull[2]));
+    end=new Date(now.getFullYear(),parseInt(krFull[3])-1,parseInt(krFull[4]));
+    hasDate=true;
+  } else {
+    // 2) N월M일?~D일? (한글 같은 달 범위, 예: 8월20~21, 8월20일~21일)
+    const krSame=t.match(new RegExp('(\\d{1,2})월\\s*(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})일?'));
+    if(krSame){
+      start=new Date(now.getFullYear(),parseInt(krSame[1])-1,parseInt(krSame[2]));
+      end=new Date(now.getFullYear(),parseInt(krSame[1])-1,parseInt(krSame[3]));
+      hasDate=true;
+    } else {
+      // 3) M/D~M/D (슬래시 전체 범위, 예: 8/20~8/21)
+      const mdFull=t.match(new RegExp('(\\d{1,2})\\/(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})\\/(\\d{1,2})일?'));
+      if(mdFull){
+        start=new Date(now.getFullYear(),parseInt(mdFull[1])-1,parseInt(mdFull[2]));
+        end=new Date(now.getFullYear(),parseInt(mdFull[3])-1,parseInt(mdFull[4]));
+        hasDate=true;
+      } else {
+        // 4) M/D~D (슬래시 같은 달 범위, 예: 8/20,21 또는 8/20~21)
+        const mdSame=t.match(new RegExp('(\\d{1,2})\\/(\\d{1,2})일?\\s*'+SEP+'\\s*(\\d{1,2})일?(?!\\/)'));
+        if(mdSame){
+          start=new Date(now.getFullYear(),parseInt(mdSame[1])-1,parseInt(mdSame[2]));
+          end=new Date(now.getFullYear(),parseInt(mdSame[1])-1,parseInt(mdSame[3]));
+          hasDate=true;
+        } else {
+          // 5) M/D 단일
+          const mdS=t.match(/(\d{1,2})\/(\d{1,2})일?/);
+          if(mdS){start=new Date(now.getFullYear(),parseInt(mdS[1])-1,parseInt(mdS[2]));hasDate=true;}
+          // 6) N월M일 단일
+          const mdK=t.match(/(\d{1,2})월\s*(\d{1,2})일?/);
+          if(mdK){start=new Date(now.getFullYear(),parseInt(mdK[1])-1,parseInt(mdK[2]));hasDate=true;}
+          if(t.includes('오늘')){hasDate=true;}
+          else if(t.includes('내일')){start.setDate(start.getDate()+1);hasDate=true;}
+          else if(t.includes('모레')){start.setDate(start.getDate()+2);hasDate=true;}
+          const isNext=t.includes('다음주')||t.includes('다음 주');
+          for(const[name,wd]of DAYS){
+            if(t.includes(name)){let ahead=wd-now.getDay();if(ahead<=0||isNext)ahead+=7;start=new Date(now);start.setDate(start.getDate()+ahead);hasDate=true;break;}
+          }
+        }
+      }
+    }
+  }
+  if(t.includes('저녁')&&!hasTimeExpr(t)){hour=18;hasTime=true;}
+  else if(t.includes('아침')&&!hasTimeExpr(t)){hour=8;hasTime=true;}
+  else if(t.includes('점심')&&!hasTimeExpr(t)){hour=12;hasTime=true;}
+  const tm=t.match(/(\d{1,2})시(?:\s*(\d{1,2})분)?/);
+  if(tm){hour=parseInt(tm[1]);if(tm[2])min=parseInt(tm[2]);if(isPM&&hour<12)hour+=12;if(!isPM&&!t.includes('오전')&&hour<9)hour+=12;hasTime=true;}
+  if(!hasDate&&!hasTime)return{start:null,end:null};
+  start.setHours(hasTime?hour:9,min,0,0);
+  if(end)end.setHours(17,0,0,0);
+  return{start,end};
+}
+function extractDate(t){return extractDates(t).start;}
+function extractTitle(t){
+  let r=t;
+  const SEP='[,，~～\\-]';
+  [/다음\s*주\s*[가-힣]*요일/g,/이번\s*주\s*[가-힣]*요일/g,/[가-힣]*요일/g,
+   // 한글 범위: N월M일?~N월M일?, N월M일?~D일?
+   new RegExp('\\d{1,2}월\\s*\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}월\\s*\\d{1,2}일?','g'),
+   new RegExp('\\d{1,2}월\\s*\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}일?','g'),
+   // 슬래시 범위: M/D~M/D, M/D~D
+   new RegExp('\\d{1,2}\\/\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}\\/\\d{1,2}일?','g'),
+   new RegExp('\\d{1,2}\\/\\d{1,2}일?\\s*'+SEP+'\\s*\\d{1,2}일?','g'),
+   // 단일
+   /\d{1,2}\/\d{1,2}일?/g,/\d{1,2}월\s*\d{1,2}일?/g,
+   /오늘|내일|모레|글피/g,
+   /오전\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,/오후\s*\d{1,2}시(?:\s*\d{1,2}분)?/g,
+   /\d{1,2}시\s*\d{1,2}분/g,/\d{1,2}시/g,/오전|오후|저녁|아침|점심|밤/g
+  ].forEach(p=>{r=r.replace(p,'');});
+  return r.replace(/\s+/g,' ').trim()||t;
+}
+function parse(t){
+  t=t.trim();if(!t)return null;
+  const{start:date,end:endDate}=extractDates(t);
+  const hasTime=hasTimeExpr(t),isMultiDay=!!(endDate&&date&&endDate.toDateString()!==date.toDateString());
+  const isCal=CAL_KEYS.some(k=>t.includes(k)),isRem=[...REM_KEYS,...SHOP_KEYS].some(k=>t.includes(k));
+  // 날짜 범위가 있으면 캘린더 우선
+  const type=isMultiDay?'calendar':isCal?'calendar':isRem?'reminder':hasTime?'calendar':'reminder';
+  const cat=WORK_KEYS.some(k=>t.includes(k))?'직장':SHOP_KEYS.some(k=>t.includes(k))?'쇼핑':HEALTH_KEYS.some(k=>t.includes(k))?'건강':'개인';
+  let conf=0.4;if(date)conf+=0.3;if(isCal||isRem||isMultiDay)conf+=0.2;if(hasTime)conf+=0.1;
+  return{type,title:extractTitle(t),date,endDate,category:cat,confidence:conf};
+}
+
+// ─── ICS Generation ───────────────────────────────────────────────────────────
+function pad(n){return String(n).padStart(2,'0');}
+function icsDate(d){return`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;}
+function uid(){return Date.now()+'@smartschedule';}
+function makeEventICS(title,start,end,location){
+  const s=icsDate(start),e=icsDate(end||new Date(start.getTime()+3600000));
+  const now=icsDate(new Date());
+  const loc=location?`\r\nLOCATION:${location.replace(/\r\n/g,' ')}`:'';
+  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nDTSTART:${s}\r\nDTEND:${e}\r\nSUMMARY:${title}${loc}\r\nEND:VEVENT\r\nEND:VCALENDAR`;
+}
+function makeTodoICS(title,due){
+  const d=due?`\r\nDUE:${icsDate(due)}`:'';
+  const now=icsDate(new Date());
+  return`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SmartSchedule//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VTODO\r\nUID:${uid()}\r\nDTSTAMP:${now}\r\nSUMMARY:${title}${d}\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO\r\nEND:VCALENDAR`;
+}
+function openCalendarICS(content){
+  // SW 활성: VEVENT → iOS Calendar 앱이 직접 열림
+  if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+    window.location.href='ics?c='+encodeURIComponent(content)+'&f=event.ics';
+    return;
+  }
+  if(/iPhone|iPad|iPod/.test(navigator.userAgent)){
+    showToast('준비 중입니다. 잠시 후 새로고침됩니다');return;
+  }
+  const url=URL.createObjectURL(new Blob([content],{type:'text/calendar'}));
+  const a=document.createElement('a');a.href=url;a.download='event.ics';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function openReminderICS(content){
+  // iOS Reminders는 웹 내비게이션으로 VTODO를 직접 열 수 없음
+  // → Web Share API로 공유 → '파일에 저장' → Files 앱에서 열기
+  const blob=new Blob([content],{type:'text/calendar'});
+  const file=new File([blob],'reminder.ics',{type:'text/calendar'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file]}).catch(()=>{});
+    return;
+  }
+  if(!/iPhone|iPad|iPod/.test(navigator.userAgent)){
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='reminder.ics';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+}
+
+// ─── Web Speech API ───────────────────────────────────────────────────────────
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recognition=null,isRecording=false,silenceTimer=null;
+const SILENCE_MS=3000;
+
+function resetSilenceTimer(){
+  clearTimeout(silenceTimer);
+  silenceTimer=setTimeout(()=>{ if(isRecording)recognition.stop(); },SILENCE_MS);
+}
+
+function initRecognition(){
+  if(!SR)return null;
+  const r=new SR();
+  r.lang='ko-KR';
+  r.continuous=true;
+  r.interimResults=true;
+
+  r.onstart=()=>{
+    isRecording=true;
+    document.getElementById('inputText').style.display='none';
+    document.getElementById('recordingBox').classList.add('show');
+    const btn=document.getElementById('voiceBtn');
+    btn.textContent='⏹ 중지';btn.classList.add('recording');
+    // 첫 발화 대기: 5초 내 말 없으면 자동 종료
+    silenceTimer=setTimeout(()=>{ if(isRecording)recognition.stop(); },5000);
+  };
+
+  r.onresult=(e)=>{
+    let interim='',final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal)final+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
+    }
+    const text=final||interim;
+    document.getElementById('interimText').textContent=text;
+    if(final) document.getElementById('inputText').value=final;
+    // 음성 감지 때마다 3초 타이머 리셋
+    resetSilenceTimer();
+  };
+
+  r.onend=()=>{
+    clearTimeout(silenceTimer);
+    isRecording=false;
+    document.getElementById('inputText').style.display='';
+    document.getElementById('recordingBox').classList.remove('show');
+    document.getElementById('interimText').textContent='';
+    const btn=document.getElementById('voiceBtn');
+    btn.textContent='🎤 음성 입력';btn.classList.remove('recording');
+    const text=document.getElementById('inputText').value.trim();
+    if(text)setTimeout(onParse,400);
+  };
+
+  r.onerror=(e)=>{
+    clearTimeout(silenceTimer);
+    isRecording=false;
+    document.getElementById('inputText').style.display='';
+    document.getElementById('recordingBox').classList.remove('show');
+    const btn=document.getElementById('voiceBtn');
+    btn.textContent='🎤 음성 입력';btn.classList.remove('recording');
+    if(e.error!=='aborted'&&e.error!=='no-speech'){
+      showToast('음성 인식 오류: '+e.error);
+    }
+  };
+  return r;
+}
+
+function toggleVoice(){
+  if(!SR){showToast('iOS Safari에서 지원됩니다 (설정 > Safari > 음성 인식 허용)');return;}
+  if(!recognition)recognition=initRecognition();
+  if(isRecording){recognition.stop();}
+  else{recognition.start();}
+}
+
+// ─── State & UI ───────────────────────────────────────────────────────────────
+let current=null;
+
+function onParse(){
+  const txt=document.getElementById('inputText').value;
+  const result=parse(txt);
+  if(!result){showToast('입력을 확인해 주세요');return;}
+  current=result;renderResult();
+}
+
+function renderResult(){
+  if(!current)return;
+  const{type,title,date,category,confidence,location}=current;
+  const badge=document.getElementById('confidenceBadge');
+  badge.textContent=`${Math.round(confidence*100)}% 확신`;
+  badge.className='badge '+(confidence>=0.8?'badge-green':'badge-orange');
+  document.querySelectorAll('.seg-btn').forEach(b=>{b.classList.toggle('active',b.dataset.type===type);});
+  document.getElementById('titleInput').value=title;
+  const dateEl=document.getElementById('dateDisplay');
+  dateEl.textContent=date?(current.endDate?formatDate(date)+' ~ '+formatDate(current.endDate):formatDate(date)):'날짜 없음';
+  const locSection=document.getElementById('locationSection');
+  if(location){document.getElementById('locationDisplay').textContent='📍 '+location;locSection.classList.remove('hidden');}
+  else{locSection.classList.add('hidden');}
+  document.getElementById('categorySection').style.display=type==='reminder'?'block':'none';
+  document.querySelectorAll('.chip').forEach(c=>{c.classList.toggle('active',c.dataset.cat===category);});
+  document.getElementById('confirmBtn').textContent=type==='calendar'?'📅 캘린더에 추가':'🔔 미리알림에 추가';
+  document.getElementById('resultCard').classList.remove('hidden');
+  document.getElementById('examplesCard').classList.add('hidden');
+}
+
+function setType(t){current.type=t;renderResult();}
+function setCat(cat){current.category=cat;renderResult();}
+function onCancel(){
+  current=null;
+  document.getElementById('resultCard').classList.add('hidden');
+  document.getElementById('examplesCard').classList.remove('hidden');
+}
+
+function onConfirm(){
+  if(!current)return;
+  const title=document.getElementById('titleInput').value||current.title;
+  const{type,date,endDate,category}=current;
+  if(type==='calendar'){
+    openCalendarICS(makeEventICS(title,date||new Date(),endDate,current.location));
+    showToast('캘린더 추가 화면이 열립니다');
+  } else {
+    openReminderICS(makeTodoICS(title,date));
+    showToast('공유 메뉴 → 파일에 저장 → Files 앱에서 열기');
+  }
+  setTimeout(()=>{document.getElementById('inputText').value='';onCancel();},500);
+}
+
+function fillExample(text){document.getElementById('inputText').value=text;}
+
+function formatDate(d){
+  const dow=['일','월','화','수','목','금','토'][d.getDay()];
+  let h=d.getHours();const m=String(d.getMinutes()).padStart(2,'0');
+  const ap=h>=12?'오후':'오전';h=h%12||12;
+  return`${d.getMonth()+1}월 ${d.getDate()}일 (${dow}) ${ap} ${h}:${m}`;
+}
+
+function showIosGuide(appName){
+  let el=document.getElementById('iosGuide');
+  if(!el){
+    el=document.createElement('div');el.id='iosGuide';
+    el.style.cssText='position:fixed;bottom:80px;left:16px;right:16px;background:#1c1c1e;color:#fff;border-radius:14px;padding:16px;font-size:14px;line-height:1.6;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML=`<div style="font-weight:600;margin-bottom:8px">📲 ${appName}에 추가하는 방법</div>`+
+    `<div>① 공유 시트에서 <b>"파일에 저장"</b> 탭</div>`+
+    `<div>② <b>파일(Files) 앱</b> 열기</div>`+
+    `<div>③ 저장된 <b>.ics 파일</b> 탭 → "${appName}에 추가" 선택</div>`+
+    `<div style="margin-top:10px;text-align:right"><button onclick="document.getElementById('iosGuide').remove()" style="background:#0a84ff;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px">닫기</button></div>`;
+  el.style.display='block';
+}
+
+let toastTimer=null;
+function showToast(msg){
+  let el=document.querySelector('.toast');
+  if(!el){el=document.createElement('div');el.className='toast';document.body.appendChild(el);}
+  el.textContent=msg;el.style.opacity='1';
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.style.opacity='0';},3000);
+}
+
+// ─── Settings (API Key) ───────────────────────────────────────────────────────
+let gApiKey=localStorage.getItem('openai_key')||'';
+function openSettings(){document.getElementById('apiKeyInput').value=gApiKey;document.getElementById('settingsModal').classList.remove('hidden');}
+function closeSettings(){document.getElementById('settingsModal').classList.add('hidden');}
+function saveSettings(){
+  gApiKey=document.getElementById('apiKeyInput').value.trim();
+  localStorage.setItem('openai_key',gApiKey);
+  closeSettings();
+  showToast(gApiKey?'API 키가 저장됐습니다':'API 키가 삭제됐습니다');
+}
+
+// ─── Image Analysis (GPT-4o Vision) ──────────────────────────────────────────
+function triggerImagePick(){
+  if(!gApiKey){openSettings();showToast('OpenAI API 키를 먼저 입력해주세요');return;}
+  document.getElementById('imageInput').click();
+}
+
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result.split(',')[1]);
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function resizeImage(file,maxPx=1536){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      let{width:w,height:h}=img;
+      if(w<=maxPx&&h<=maxPx){
+        // 원본 크기 그대로 base64
+        const reader=new FileReader();
+        reader.onload=()=>resolve({base64:reader.result.split(',')[1],mimeType:file.type});
+        reader.onerror=reject;
+        reader.readAsDataURL(file);
+        return;
+      }
+      const ratio=Math.min(maxPx/w,maxPx/h);
+      w=Math.round(w*ratio);h=Math.round(h*ratio);
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl=canvas.toDataURL('image/jpeg',0.85);
+      resolve({base64:dataUrl.split(',')[1],mimeType:'image/jpeg'});
+    };
+    img.onerror=reject;
+    img.src=url;
+  });
+}
+
+async function onImageSelected(e){
+  const file=e.target.files[0];if(!file)return;
+  e.target.value='';
+  const btn=document.getElementById('imageBtn');
+  btn.textContent='⏳ 분석 중…';btn.disabled=true;
+  try{
+    const{base64,mimeType}=await resizeImage(file);
+    const result=await analyzeWithVision(base64,mimeType);
+    applyVisionResult(result);
+  }catch(err){
+    alert('이미지 분석 오류\n\n'+err.message);
+  }finally{
+    btn.textContent='📷 이미지';btn.disabled=false;
+  }
+}
+
+async function analyzeWithVision(base64,mimeType){
+  const prompt=`이 이미지에서 캘린더에 추가할 일정 정보를 추출해서 JSON만 반환해 (설명 없이, 마크다운 없이):
+{"type":"calendar 또는 reminder","title":"일정/예약 제목","startDate":"YYYY-MM-DD","startTime":"HH:MM 또는 null","endDate":"YYYY-MM-DD 또는 null","endTime":"HH:MM 또는 null","location":"장소/주소 또는 null","notes":"기타 중요 정보 또는 null"}
+규칙: 호텔/숙박→type=calendar,title=호텔명,startDate=체크인,startTime=체크인시간,endDate=체크아웃,endTime=체크아웃시간,location=호텔주소. 항공편→출발시간,location=출발지→도착지. 미팅/업무→적절히 판단.`;
+  const res=await fetch('https://api.openai.com/v1/chat/completions',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+gApiKey,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'gpt-4o',max_tokens:400,
+      messages:[{role:'user',content:[
+        {type:'image_url',image_url:{url:'data:'+mimeType+';base64,'+base64,detail:'auto'}},
+        {type:'text',text:prompt}
+      ]}]
+    })
+  });
+  if(!res.ok){
+    let msg='API 오류 (HTTP '+res.status+')';
+    try{const err=await res.json();msg=err.error?.message||msg;}catch{}
+    throw new Error(msg);
+  }
+  const data=await res.json();
+  const text=data.choices[0].message.content.trim().replace(/^```(?:json)?\n?/,'').replace(/\n?```$/,'');
+  let parsed;
+  try{parsed=JSON.parse(text);}
+  catch{throw new Error('응답 파싱 실패:\n'+text.slice(0,200));}
+  return parsed;
+}
+
+function applyVisionResult(r){
+  let startDate=null,endDate=null;
+  if(r.startDate){
+    const[y,mo,d]=r.startDate.split('-').map(Number);
+    startDate=new Date(y,mo-1,d);
+    if(r.startTime){const[h,m]=r.startTime.split(':').map(Number);startDate.setHours(h,m,0,0);}
+    else startDate.setHours(9,0,0,0);
+  }
+  if(r.endDate){
+    const[y,mo,d]=r.endDate.split('-').map(Number);
+    endDate=new Date(y,mo-1,d);
+    if(r.endTime){const[h,m]=r.endTime.split(':').map(Number);endDate.setHours(h,m,0,0);}
+    else endDate.setHours(17,0,0,0);
+  }
+  current={type:r.type||'calendar',title:r.title||'일정',date:startDate,endDate,category:'개인',confidence:0.95,location:r.location||null,notes:r.notes||null};
+  renderResult();
+  showToast('이미지에서 일정을 추출했습니다 ✓');
+}
+
+// ─── Service Worker 등록 — 첫 설치 후 자동 새로고침으로 즉시 활성화
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    const sw=reg.installing||reg.waiting;
+    if(sw){
+      sw.addEventListener('statechange',()=>{
+        if(sw.state==='activated') window.location.reload();
+      });
+    }
+  }).catch(()=>{});
+}
+</script>
+</body>
+</html>
